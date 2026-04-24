@@ -1,23 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Package, Tag, FileText, CheckCircle, Database, LogIn, Lock, TrendingUp, AlertTriangle, MessageCircle, DollarSign } from 'lucide-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  AreaChart, Area, PieChart, Pie, Cell 
+} from 'recharts';
+import { 
+  LayoutDashboard, Package, TrendingUp, DollarSign, BellRing, Settings, 
+  Search, Bot, Sparkles, FileText, ChevronRight, CheckCircle, AlertTriangle, 
+  ArrowUpRight, ArrowDownRight, MessageCircle 
+} from 'lucide-react';
 
-// --- MOCK DATA ---
-const mockData = [
-  { name: 'Last Month', profit: 45000 },
-  { name: 'Current Month', profit: 52000 },
-  { name: 'Projected', profit: 60000 },
-];
-
-const initialMockProducts = [
-  { id: 1, name: 'Tata Salt', category: 'FMCG', price: 25, stock: 150 },
-  { id: 2, name: 'Aashirvaad Atta', category: 'FMCG', price: 450, stock: 40 },
-  { id: 3, name: 'Samsung Galaxy', category: 'Electronics', price: 25000, stock: 5 },
-  { id: 4, name: 'Amul Butter', category: 'Dairy', price: 60, stock: 12 },
-];
-
+// ==========================================
+// 1. DATA PROVIDER & FETCH LOGIC (PRESERVED)
+// ==========================================
 const DataContext = React.createContext();
 const DataProvider = ({ children }) => {
   const [products, setProducts] = useState([]);
@@ -27,21 +23,20 @@ const DataProvider = ({ children }) => {
     fetch('http://localhost:8081/api/ims/products')
       .then(res => res.json())
       .then(data => {
-         // Map Java backend Product entity structure
          const mapped = data.map(p => ({
             id: p.id,
             name: p.name,
             category: p.category,
             price: p.price,
-            stock: 50 // Use default 50 if stock map not joined directly
+            stock: 50 // Standardize default
          }));
          setProducts(mapped);
       })
       .catch(err => console.error("Could not fetch DB products: ", err));
   }, []);
 
-  const showToast = (msg) => {
-     setToast(msg);
+  const showToast = (msg, type = 'success') => {
+     setToast({ msg, type });
      setTimeout(() => setToast(null), 4000);
   };
 
@@ -56,7 +51,7 @@ const DataProvider = ({ children }) => {
       
       setProducts(prev => prev.map(p => {
         if (p.name === name) {
-          if (result.newStock < 10) showToast(`WhatsApp & Email ALERTS Fired: Low Stock for ${name}`);
+          if (result.newStock < 10) showToast(`WhatsApp Alert: Low Stock for ${name}`, 'critical');
           return { ...p, stock: result.newStock };
         }
         return p;
@@ -74,23 +69,45 @@ const DataProvider = ({ children }) => {
          body: JSON.stringify({ productName: name, actionType: actionType })
       });
       const result = await res.json();
-      
       setProducts(prev => prev.map(p => p.name === name ? { ...p, price: result.newPrice } : p));
-      showToast(`Database Price Updated for ${name}`);
+      showToast(`AI Price Updated: ₹${result.newPrice}`, 'success');
     } catch(err) {
       console.error('Price update error', err);
     }
   };
 
+  const restockProduct = async (name, qty) => {
+    try {
+      const res = await fetch('http://localhost:8081/api/ims/restock', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ productName: name, quantity: parseInt(qty) })
+      });
+      const result = await res.json();
+      setProducts(prev => prev.map(p => p.name === name ? { ...p, stock: result.newStock } : p));
+      showToast(`Stock replenished for ${name}: +${qty}`, 'success');
+    } catch(err) {
+      console.error('Restock error', err);
+    }
+  };
+
   return (
-    <DataContext.Provider value={{ products, recordSale, applyAction }}>
+    <DataContext.Provider value={{ products, recordSale, applyAction, restockProduct }}>
       {children}
       <AnimatePresence>
         {toast && (
-          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
-             className="fixed bottom-10 right-10 z-[100] bg-green-500 text-white font-bold p-4 rounded-xl shadow-2xl flex items-center gap-3"
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.9 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className={`fixed bottom-8 right-8 z-[100] px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-xl border flex items-center gap-4 ${
+                toast.type === 'critical' 
+                ? 'bg-red-500/90 border-red-400 text-white shadow-red-500/50' 
+                : 'bg-[#003153]/90 border-blue-400 text-white shadow-blue-500/50'
+            }`}
           >
-             <MessageCircle size={24} /> {toast}
+             {toast.type === 'critical' ? <AlertTriangle className="animate-pulse" /> : <Sparkles />}
+             <span className="font-semibold">{toast.msg}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -98,405 +115,389 @@ const DataProvider = ({ children }) => {
   );
 };
 
-// --- STATIC UI HELPERS ---
-// Removed 3D tilt tracking, but retained the glass styling.
-const StaticGlassCard = ({ children, className = "" }) => (
-  <div className={`glass-card rounded-2xl relative overflow-hidden ${className}`}>
-    <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-white/10 pointer-events-none" />
-    <div className="relative z-10 p-6">
-      {children}
-    </div>
-  </div>
-);
-
-// --- AUTH CONTEXT ---
-const AuthContext = React.createContext();
-
-const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // { username: 'admin', role: 'ADMIN' }
-  const login = (role) => setUser({ username: role.toLowerCase(), role });
-  const logout = () => setUser(null);
-  return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-// --- PAGES ---
-
-const LoginPage = () => {
-  const { login } = React.useContext(AuthContext);
-  const navigate = useNavigate();
-
-  const handleLogin = (role) => {
-    login(role);
-    if (role === 'ADMIN') navigate('/admin');
-    if (role === 'USER') navigate('/user');
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen relative z-10 p-4">
-      <StaticGlassCard className="w-full max-w-md shadow-2xl border border-white/60">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-prussian-blue to-blue-800 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-900/20 mb-4">
-            <Lock className="text-white" size={32} />
-          </div>
-          <h1 className="text-3xl font-black text-prussian-blue tracking-tight">IMS<span className="text-blue-500 font-light">AI</span> Login</h1>
-          <p className="text-gray-500 mt-2 font-medium">Select your role to access the gateway</p>
-        </div>
-        <div className="space-y-4">
-          <motion.button 
-            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={() => handleLogin('ADMIN')}
-            className="w-full bg-prussian-blue text-white p-4 rounded-xl font-bold flex items-center justify-between shadow-md hover:bg-prussian-light transition"
-          >
-            <span>Administrator Access</span> <LogIn size={20} />
-          </motion.button>
-          <motion.button 
-            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={() => handleLogin('USER')}
-            className="w-full bg-white text-prussian-blue border-2 border-prussian-blue p-4 rounded-xl font-bold flex items-center justify-between shadow-sm hover:bg-gray-50 transition"
-          >
-            <span>Standard User Panel</span> <Package size={20} />
-          </motion.button>
-        </div>
-      </StaticGlassCard>
-    </div>
-  );
-};
-
-const AdminDashboard = () => {
-  const [trendData, setTrendData] = useState([]);
-  const [quotes, setQuotes] = useState([]);
-  const { products, applyAction } = React.useContext(DataContext);
-
-  const runPhase3Analysis = () => {
-    // Dynamically grab 2 random products from active tracking inventory
-    const shuffled = [...products].sort(() => 0.5 - Math.random()).slice(0, 2);
-    
-    const newTrends = shuffled.map(prod => {
-      const isHigh = Math.random() > 0.5;
-      return {
-        product: prod.name,
-        semantic_match: prod.category,
-        prediction: isHigh ? 'HIGH DEMAND' : 'LOW DEMAND',
-        confidence: (70 + (Math.random() * 25)).toFixed(1) + '%',
-        action: isHigh ? `INCREASE PRICE +${Math.floor(Math.random()*10)}%` : 'APPLY DISCOUNT',
-        color: isHigh ? 'text-green-600' : 'text-red-600',
-        bg: isHigh ? 'bg-green-100' : 'bg-red-100',
-        applied: false
-      };
-    });
-    setTrendData(newTrends);
-    
-    // Dynamic Quotes Generation
-    const basePrice = Math.floor(Math.random() * 5000) + 1000;
-    setQuotes([
-      { seller: `Distributor ${Math.floor(Math.random()*100)}`, amount: basePrice, trust: (8 + Math.random()*2).toFixed(1), ai_recommendation: 1, status: 'PENDING' },
-      { seller: `Global Supplier ${Math.floor(Math.random()*100)}`, amount: basePrice + 100, trust: (9 + Math.random()).toFixed(1), ai_recommendation: 0, status: 'PENDING' },
-      { seller: `Local Vendor ${Math.floor(Math.random()*100)}`, amount: basePrice - 500, trust: (4 + Math.random()*3).toFixed(1), ai_recommendation: -1, status: 'PENDING' } 
-    ]);
-  };
-
-  const handleApplyTrend = (idx, product, action) => {
-    applyAction(product, action);
-    setTrendData(prev => prev.map((item, i) => i === idx ? { ...item, applied: true } : item));
-  };
-
-  const approveQuote = () => {
-    setQuotes(prev => prev.map(q => q.ai_recommendation === 1 ? { ...q, status: 'APPROVED' } : { ...q, status: 'REJECTED' }));
-  };
-
-  return (
-    <div className="p-8">
-      <h1 className="text-4xl font-extrabold text-prussian-blue mb-8 drop-shadow-sm flex items-center gap-3">
-        <Database className="text-blue-500" /> Admin Dashboard (Phase 3 Active)
-      </h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-        <StaticGlassCard>
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-blue-100 rounded-xl"><TrendingUp className="text-prussian-blue" size={28} /></div>
-            <h2 className="text-2xl font-bold text-prussian-blue">Scikit-Learn Market Engine</h2>
-          </div>
-          <p className="text-gray-700 leading-relaxed mb-6 font-medium">Predicting future demand via Random Forest and optimizing pricing using live trends.</p>
-          
-          {trendData.length > 0 ? (
-             <div className="space-y-3 mb-6">
-                {trendData.map((d, idx) => (
-                   <div key={d.product} className="p-3 border rounded-xl bg-white/60 flex justify-between items-center text-sm">
-                      <div>
-                         <span className="font-bold block">{d.product}</span>
-                         <span className="text-gray-500 text-xs">Category: {d.semantic_match}</span>
-                      </div>
-                      <div className="text-right flex flex-col items-end gap-1">
-                         <span className={`font-bold px-2 py-1 rounded ${d.bg} ${d.color} text-xs`}>{d.prediction} ({d.confidence})</span>
-                         {!d.applied ? (
-                             <motion.button whileHover={{scale:1.05}} onClick={() => handleApplyTrend(idx, d.product, d.action)} className="text-xs bg-prussian-blue text-white px-2 py-1 rounded shadow cursor-pointer">{d.action}</motion.button>
-                         ) : (
-                             <span className="text-xs text-green-600 font-bold flex items-center gap-1"><CheckCircle size={12}/> Applied</span>
-                         )}
-                      </div>
-                   </div>
-                ))}
-             </div>
-          ) : (
-            <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-xl mb-6 bg-white/30 text-gray-400 font-medium italic">
-                Awaiting Engine Initialization...
-            </div>
-          )}
-
-          <motion.button 
-            onClick={runPhase3Analysis}
-            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} 
-            className="bg-prussian-blue text-white px-6 py-3 rounded-xl w-full font-semibold shadow-lg hover:bg-prussian-light"
-          >
-            Run Demand Prediction (Phase 3)
-          </motion.button>
-        </StaticGlassCard>
-
-        <StaticGlassCard>
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-green-100 rounded-xl"><CheckCircle className="text-prussian-blue" size={28} /></div>
-            <h2 className="text-2xl font-bold text-prussian-blue">AI Quotation Engine</h2>
-          </div>
-          <p className="text-gray-700 leading-relaxed mb-6 font-medium">Evaluating multiple supplier quotes via Gemini 1.5 Flash algorithm for best procurement.</p>
-          
-          {quotes.length > 0 ? (
-             <div className="space-y-3 mb-6">
-                {quotes.map(q => (
-                   <div key={q.seller} className={`p-3 border-2 rounded-xl flex justify-between items-center text-sm ${q.ai_recommendation === 1 ? 'border-green-400 bg-green-50/50' : 'bg-white/60 border-transparent'}`}>
-                      <div>
-                         <span className="font-bold flex items-center gap-2">
-                           {q.seller} {q.ai_recommendation === 1 && <CheckCircle size={14} className="text-green-600"/>}
-                         </span>
-                         <span className="text-gray-500 text-xs">Trust Score: {q.trust}/10 | Status: {q.status}</span>
-                      </div>
-                      <div className="text-right font-bold text-prussian-blue">₹{q.amount}</div>
-                   </div>
-                ))}
-             </div>
-          ) : (
-             <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-xl mb-6 bg-white/30 text-gray-400 font-medium italic">
-                Awaiting Engine Initialization...
-             </div>
-          )}
-
-          <motion.button onClick={approveQuote} disabled={quotes.length === 0}
-            whileHover={quotes.length > 0 ? { scale: 1.05 } : {}} whileTap={quotes.length > 0 ? { scale: 0.95 } : {}} 
-            className={`px-6 py-3 rounded-xl w-full font-semibold shadow-lg text-white ${quotes.length > 0 ? 'bg-gradient-to-r from-prussian-blue to-blue-800 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-          >
-            Review & Approve Best Quote
-          </motion.button>
-        </StaticGlassCard>
-        <StaticGlassCard className="col-span-1 md:col-span-2">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-purple-100 rounded-xl"><DollarSign className="text-purple-700" size={28} /></div>
-            <h2 className="text-2xl font-bold text-prussian-blue">Finance & GST Breakdown Overview</h2>
-          </div>
-          <p className="text-gray-700 leading-relaxed mb-6 font-medium">Dynamically calculated overall inventory Gross Evaluation with automatic SGST/CGST slices mapped visually.</p>
-          
-          <div className="flex flex-col md:flex-row gap-8 items-center justify-center">
-             <div className="h-64 w-64">
-               <ResponsiveContainer width="100%" height="100%">
-                 <PieChart>
-                    <Pie data={[ {name:'Base Value', val: 75}, {name:'CGST (9%)', val: 12.5}, {name:'SGST (9%)', val: 12.5} ]} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="val">
-                       <Cell fill="#003153" />
-                       <Cell fill="#3b82f6" />
-                       <Cell fill="#10b981" />
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '12px' }} />
-                 </PieChart>
-               </ResponsiveContainer>
-             </div>
-             <div className="space-y-4">
-                 <div className="flex items-center gap-2"><div className="w-4 h-4 bg-prussian-blue rounded-full"></div> <span className="font-bold text-gray-700">Gross Base Value (Top Products)</span></div>
-                 <div className="flex items-center gap-2"><div className="w-4 h-4 bg-blue-500 rounded-full"></div> <span className="font-bold text-gray-700">CGST Segment (9%)</span></div>
-                 <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-500 rounded-full"></div> <span className="font-bold text-gray-700">SGST Segment (9%)</span></div>
-             </div>
-          </div>
-        </StaticGlassCard>
-      </div>
-    </div>
-  );
-};
-
-const UserDashboard = () => {
-  const { products, recordSale } = React.useContext(DataContext);
-  const [selectedProduct, setSelectedProduct] = useState(products[0]?.name || '');
-  const [qty, setQty] = useState('');
-
-  const handleSale = () => {
-    if (selectedProduct && qty && parseInt(qty) > 0) {
-      recordSale(selectedProduct, parseInt(qty));
-      setQty('');
-    }
-  };
-
-  return (
-  <div className="p-8">
-    <h1 className="text-4xl font-extrabold text-prussian-blue mb-8 drop-shadow-sm">Stock & Sales Panel</h1>
-    <StaticGlassCard className="mb-8 border-t-4 border-t-prussian-blue">
-      <h2 className="text-xl font-bold mb-4 text-prussian-blue">Record Immediate Entry</h2>
-      <div className="flex gap-4">
-        <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} className="border-2 border-gray-200 p-3 rounded-xl flex-1 bg-white/50 backdrop-blur-md focus:border-prussian-blue outline-none font-medium text-gray-700">
-          {products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-        </select>
-        <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="Qty" className="border-2 border-gray-200 p-3 rounded-xl w-32 bg-white/50 backdrop-blur-md focus:border-prussian-blue outline-none font-medium text-gray-700" />
-        <motion.button onClick={handleSale} disabled={!qty} whileHover={qty ? { scale: 1.05 } : {}} whileTap={qty ? { scale: 0.95 } : {}} className={`px-8 py-3 rounded-xl font-bold shadow-md text-white ${qty ? 'bg-prussian-blue hover:bg-prussian-light cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}>
-          Record Sale
-        </motion.button>
-      </div>
-    </StaticGlassCard>
-    
-    <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 overflow-hidden">
-      <table className="w-full text-left font-medium">
-        <thead className="bg-gray-50/80 border-b border-gray-200/60 backdrop-blur-sm">
-          <tr>
-            <th className="p-5 text-gray-600 font-semibold uppercase tracking-wider text-sm">Product Name</th>
-            <th className="p-5 text-gray-600 font-semibold uppercase tracking-wider text-sm">Category</th>
-            <th className="p-5 text-gray-600 font-semibold uppercase tracking-wider text-sm">Price (₹)</th>
-            <th className="p-5 text-gray-600 font-semibold uppercase tracking-wider text-sm">Available Stock</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((p, i) => (
-            <tr key={p.id} className="border-b border-gray-100/50 hover:bg-white/60 transition-colors">
-              <td className="p-5 text-prussian-blue font-bold">{p.name}</td>
-              <td className="p-5 text-gray-600"><span className="px-3 py-1 bg-gray-200/50 rounded-lg text-sm">{p.category}</span></td>
-              <td className="p-5 flex items-center h-full min-h-[64px]">₹{p.price}</td>
-              <td className="p-5">
-                <span className={`px-4 py-1.5 rounded-xl text-sm font-bold shadow-sm ${p.stock < 10 ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-green-100 text-green-700 border border-green-200'}`}>
-                  {p.stock} units
-                </span>
-                {p.stock < 10 && <span className="text-red-500 font-bold ml-2 text-xs uppercase inline-flex items-center gap-1 mt-1"><AlertTriangle size={12}/> Low Stock Alert Triggered</span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  );
-};
-
-const ReportTab = () => (
-  <div className="p-8">
-    <h1 className="text-4xl font-extrabold text-prussian-blue mb-8 drop-shadow-sm flex justify-between items-center">
-      Financial Analysis 
-      <a href="http://localhost:8000/api/reports/generate-pdf" download="IMS_Report.pdf">
-        <motion.button 
-          whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} 
-          className="bg-prussian-blue text-white px-6 py-3 rounded-xl shadow-lg font-bold text-sm flex items-center gap-2 cursor-pointer hover:bg-prussian-light"
-        >
-          <FileText size={18} /> GENERATE SIGNED PDF
-        </motion.button>
-      </a>
-    </h1>
-    <StaticGlassCard className="mb-8 shadow-2xl">
-      <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 text-prussian-blue pt-2 px-2">
-        <div className="w-3 h-10 bg-blue-500 rounded-full" />
-        Monthly Profit Projection
-      </h2>
-      <div className="h-96">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={mockData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
-            <XAxis dataKey="name" tick={{fill: '#4a5568', fontWeight: 600}} axisLine={false} tickLine={false} />
-            <YAxis tick={{fill: '#4a5568', fontWeight: 600}} axisLine={false} tickLine={false} tickFormatter={(value) => `₹${value/1000}k`} />
-            <Tooltip 
-              cursor={{fill: 'rgba(0,49,83,0.04)'}} 
-              contentStyle={{ borderRadius: '16px', border: '1px solid rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: 'bold' }} 
-            />
-            <Bar dataKey="profit" fill="#003153" radius={[8, 8, 0, 0]}>
-              {mockData.map((entry, index) => (
-                <cell key={`cell-${index}`} fill={index === 2 ? '#3b82f6' : '#003153'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </StaticGlassCard>
-  </div>
-);
-
-const AnimatedBackground = () => (
-  <div 
-    className="fixed inset-0 z-[0] opacity-60 pointer-events-none"
-    style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cubes.png")', backgroundSize: '120px' }}
-  />
-);
-
-const MainLayout = () => {
-  const { user, logout } = React.useContext(AuthContext);
+// ==========================================
+// 2. PREMIUM COMPONENTS
+// ==========================================
+const SidebarItem = ({ icon: Icon, text, to }) => {
   const location = useLocation();
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
+  const isActive = location.pathname === to;
   return (
-    <>
-      <nav className="w-72 bg-white/70 backdrop-blur-2xl border-r border-white/50 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20">
-        <div className="p-8 border-b border-gray-200/50 flex items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-prussian-blue to-blue-800 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20">
-            <Package className="text-white" size={24} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black text-prussian-blue tracking-tighter">IMS<span className="text-blue-500 font-light ml-1">AI</span></h1>
-            <p className="text-xs font-bold text-gray-400 tracking-wider">Hi, {user.role}</p>
-          </div>
-        </div>
-        <div className="p-6 flex-1 flex flex-col gap-3">
-           {user.role === 'ADMIN' && (
-             <Link to="/admin" className={`p-4 rounded-xl flex items-center gap-3 font-bold transition-all ${location.pathname === '/admin' ? 'bg-prussian-blue text-white shadow-lg' : 'text-gray-600 hover:bg-white'}`}>
-                <span className="text-xl">✨</span> Admin Panel
-             </Link>
-           )}
-           <Link to="/user" className={`p-4 rounded-xl flex items-center gap-3 font-bold transition-all ${location.pathname === '/user' ? 'bg-prussian-blue text-white shadow-lg' : 'text-gray-600 hover:bg-white'}`}>
-              <span className="text-xl">📦</span> User Panel
-           </Link>
-           {user.role === 'ADMIN' && (
-             <Link to="/reports" className={`p-4 rounded-xl flex items-center gap-3 font-bold transition-all ${location.pathname === '/reports' ? 'bg-prussian-blue text-white shadow-lg' : 'text-gray-600 hover:bg-white'}`}>
-                <span className="text-xl">📊</span> Report Tab
-             </Link>
-           )}
-        </div>
-        <div className="p-6 border-t font-semibold text-center mt-auto">
-          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={logout} className="text-red-500 w-full py-2 bg-red-50 hover:bg-red-100 rounded-lg transition">Logout</motion.button>
-        </div>
-      </nav>
-      <main className="flex-1 overflow-y-auto relative z-10 scroll-smooth">
-          <div className="max-w-6xl mx-auto py-6">
-            <Routes>
-              <Route path="/admin" element={user.role === 'ADMIN' ? <AdminDashboard /> : <Navigate to="/user" />} />
-              <Route path="/user" element={<UserDashboard />} />
-              <Route path="/reports" element={user.role === 'ADMIN' ? <ReportTab /> : <Navigate to="/user" />} />
-              <Route path="*" element={<Navigate to={user.role === 'ADMIN' ? "/admin" : "/user"} replace />} />
-            </Routes>
-          </div>
-      </main>
-    </>
+    <Link to={to}>
+      <motion.div 
+        whileHover={{ x: 5 }}
+        whileTap={{ scale: 0.95 }}
+        className={`flex items-center gap-3 px-4 py-3 my-1 rounded-xl cursor-pointer transition-all ${
+          isActive 
+            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30' 
+            : 'text-gray-500 hover:bg-gray-100/50 hover:text-gray-900'
+        }`}
+      >
+        <Icon size={20} className={isActive ? 'text-white' : 'text-gray-400'} />
+        <span className={`font-semibold ${isActive ? '' : 'tracking-wide'}`}>{text}</span>
+      </motion.div>
+    </Link>
   );
 };
 
-function App() {
+const KPICard = ({ title, value, sub, icon: Icon, color, delay }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: 20 }} 
+    animate={{ opacity: 1, y: 0 }} 
+    transition={{ delay, duration: 0.5, ease: "easeOut" }}
+    whileHover={{ y: -5, scale: 1.02 }}
+    className="bg-white/60 backdrop-blur-xl border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_40px_rgb(0,49,83,0.08)] transition-all"
+  >
+    <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full opacity-10 bg-gradient-to-br ${color} blur-xl group-hover:scale-150 transition-transform duration-700`}></div>
+    <div className="flex justify-between items-start mb-4">
+      <div className={`p-3 rounded-2xl bg-gradient-to-br ${color} text-white shadow-xl`}>
+        <Icon size={24} />
+      </div>
+      <span className="flex items-center gap-1 text-sm font-bold text-green-500 bg-green-50 px-2 py-1 rounded-lg">
+        <ArrowUpRight size={14} /> 12%
+      </span>
+    </div>
+    <h3 className="text-gray-500 font-medium text-sm mb-1">{title}</h3>
+    <h2 className="text-3xl font-extrabold text-[#0a0a0a] tracking-tight">{value}</h2>
+    <p className="text-xs text-gray-400 mt-2">{sub}</p>
+  </motion.div>
+);
+
+// ==========================================
+// 3. SMART DASHBOARD (HERO)
+// ==========================================
+const SmartDashboard = () => {
+  const { products } = useContext(DataContext);
+  
+  // Mock graphical data for Vercel-like charts
+  const chartData = [
+    { name: 'Jan', revenue: 4000, profit: 2400 },
+    { name: 'Feb', revenue: 5500, profit: 3200 },
+    { name: 'Mar', revenue: 7200, profit: 4800 },
+    { name: 'Apr', revenue: 6800, profit: 4100 },
+    { name: 'May', revenue: 9500, profit: 6000 },
+    { name: 'Jun', revenue: 12000, profit: 8400 },
+  ];
+
   return (
-    <AuthProvider>
-      <Router>
-        <DataProvider>
-          <div className="flex relative h-screen antialiased selection:bg-prussian-light selection:text-white overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100">
-            <AnimatedBackground />
-            <Routes>
-               <Route path="/login" element={<LoginPage />} />
-               <Route path="/*" element={<MainLayout />} />
-            </Routes>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 max-w-7xl mx-auto">
+      
+      {/* Top Utility Bar */}
+      <div className="flex justify-between items-center bg-white/40 backdrop-blur-lg p-4 rounded-2xl border border-gray-100 shadow-sm">
+         <div>
+            <h1 className="text-2xl font-extrabold text-[#0a0a0a] tracking-tight">AI Command Center</h1>
+            <p className="text-sm font-medium text-gray-500">Intelligent system overview</p>
+         </div>
+         <div className="flex gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input type="text" placeholder="Search inventory... (Cmd+K)" className="pl-10 pr-4 py-2 bg-white/60 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none w-64 transition-all" />
+            </div>
+            <motion.button whileHover={{ scale: 1.05 }} className="bg-[#0a0a0a] text-white px-5 py-2 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+              <Sparkles size={16} /> Predict Trends
+            </motion.button>
+         </div>
+      </div>
+
+      {/* KPI LAYER */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <KPICard title="Total Inventory Value" value="₹24.8M" sub="Updated real-time" icon={DollarSign} color="from-blue-500 to-indigo-600" delay={0.1} />
+        <KPICard title="Active Products" value={products.length || 0} sub="Monitoring 100% catalog" icon={Package} color="from-indigo-500 to-purple-600" delay={0.2} />
+        <KPICard title="AI Health Score" value="98.4" sub="System operating nominally" icon={ActivityIcon} color="from-emerald-400 to-teal-500" delay={0.3} />
+        <KPICard title="Critical Alerts" value="2" sub="Requires immediate review" icon={BellRing} color="from-rose-400 to-red-500" delay={0.4} />
+      </div>
+
+      {/* CHARTS & AI PANELS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Vercel-style Area Chart */}
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="lg:col-span-2 bg-white/60 backdrop-blur-xl border border-gray-100 p-6 rounded-3xl shadow-sm">
+          <h2 className="text-lg font-extrabold text-[#0a0a0a] mb-6 flex items-center gap-2"><TrendingUp className="text-indigo-500" /> Revenue vs Output Projection</h2>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
+                <Tooltip cursor={{ opacity: 0.1 }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }} />
+                <Area type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={3} fill="none" strokeDasharray="5 5" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-        </DataProvider>
-      </Router>
-    </AuthProvider>
+        </motion.div>
+
+        {/* AI Assistant Overlay */}
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }} className="bg-gradient-to-br from-[#0a0a0a] to-[#1a1a2e] p-6 rounded-3xl shadow-2xl relative overflow-hidden group text-white flex flex-col justify-between">
+           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all duration-700"></div>
+           <div>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-white/10 rounded-xl border border-white/20"><Bot size={24} className="text-indigo-300" /></div>
+                <h2 className="text-lg font-bold">Copilot Insights</h2>
+              </div>
+              <div className="space-y-4 relative z-10">
+                 <div className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all cursor-pointer">
+                    <div className="flex gap-2 items-center text-emerald-400 mb-1"><TrendingUp size={16} /> <span className="text-sm font-bold">Demand Spike</span></div>
+                    <p className="text-sm text-gray-300">Demand for <strong>Aashirvaad Atta</strong> is predicted to rise 18% next week. Suggest increasing price by ₹20.</p>
+                 </div>
+                 <div className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all cursor-pointer">
+                    <div className="flex gap-2 items-center text-rose-400 mb-1"><AlertTriangle size={16} /> <span className="text-sm font-bold">Low Stock Warning</span></div>
+                    <p className="text-sm text-gray-300"><strong>Tata Salt</strong> drops below 10 units in 4 days at current sales velocity.</p>
+                 </div>
+              </div>
+           </div>
+           <button className="w-full mt-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl font-semibold transition-all">Chat with Copilot</button>
+        </motion.div>
+      </div>
+
+    </motion.div>
   );
-}
+};
+
+// Quick missing icon wrapper
+const ActivityIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>;
+
+// ==========================================
+// 4. INTELLIGENT INVENTORY PAGE
+// ==========================================
+const InventoryPage = () => {
+  const { products, recordSale, restockProduct } = useContext(DataContext);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filtered = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-7xl mx-auto space-y-6">
+      <div className="flex justify-between items-center mt-4">
+        <div>
+           <h1 className="text-3xl font-extrabold text-[#0a0a0a] tracking-tight">Product Matrix</h1>
+           <p className="text-gray-500 font-medium">Manage and track your 100+ global entities.</p>
+        </div>
+        <button className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:scale-105 transition-all flex items-center gap-2">
+           <Package size={18} /> Add Product
+        </button>
+      </div>
+
+      <div className="bg-white/60 backdrop-blur-xl border border-gray-100 rounded-3xl shadow-sm overflow-hidden p-6">
+         <div className="mb-6">
+           <div className="relative w-1/3">
+             <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+             <input type="text" placeholder="Filter by name..." value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+           </div>
+         </div>
+
+         <div className="overflow-x-auto">
+           <table className="w-full text-left">
+             <thead>
+               <tr className="text-xs uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                 <th className="pb-4 font-semibold w-1/3">Product Name</th>
+                 <th className="pb-4 font-semibold">Category</th>
+                 <th className="pb-4 font-semibold">Value (INR)</th>
+                 <th className="pb-4 font-semibold">Stock Level</th>
+                 <th className="pb-4 font-semibold text-right">Actions</th>
+               </tr>
+             </thead>
+             <tbody className="text-sm">
+               {filtered.slice(0, 15).map((p, i) => (
+                 <motion.tr 
+                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                   key={p.id} className="border-b border-gray-50 hover:bg-indigo-50/50 transition-colors group"
+                 >
+                   <td className="py-4 font-bold text-gray-800 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-600 flex items-center justify-center font-bold text-xs">{p.name.charAt(0)}</div>
+                      {p.name}
+                   </td>
+                   <td className="py-4 text-gray-500"><span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-semibold">{p.category}</span></td>
+                   <td className="py-4 font-mono font-semibold text-gray-700">₹{parseFloat(p.price).toFixed(2)}</td>
+                   <td className="py-4">
+                      {p.stock > 10 ? (
+                        <span className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full w-max text-xs font-bold border border-emerald-100">
+                           <CheckCircle size={14} /> {p.stock} In Stock
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 text-rose-600 bg-rose-50 px-3 py-1 rounded-full w-max text-xs font-bold border border-rose-200 animate-pulse">
+                           <AlertTriangle size={14} /> {p.stock} Low Stock
+                        </span>
+                      )}
+                   </td>
+                   <td className="py-4 text-right flex justify-end gap-2">
+                      <button onClick={() => restockProduct(p.name, 50)} className="opacity-0 group-hover:opacity-100 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 transition-all shadow-sm">
+                        + Restock
+                      </button>
+                      <button onClick={() => recordSale(p.name, 1)} className="opacity-0 group-hover:opacity-100 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm">
+                        - Sell
+                      </button>
+                   </td>
+                 </motion.tr>
+               ))}
+               {filtered.length === 0 && (
+                 <tr><td colSpan="5" className="text-center py-12 text-gray-400">No products found.</td></tr>
+               )}
+             </tbody>
+           </table>
+         </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// ==========================================
+// 4B. AI MARKET ENGINE LAYER
+// ==========================================
+const AIMarketEngine = () => {
+  const [analysis, setAnalysis] = useState([]);
+  const { applyAction } = useContext(DataContext);
+
+  const runEngine = () => {
+     setAnalysis([
+       { id: 1, product: 'Samsung Galaxy M34', action: 'APPLY DISCOUNT', confidence: '88.3%', msg: 'Low demand detected next quarter.' },
+       { id: 2, product: 'Aashirvaad Shudh Chakki Atta', action: 'INCREASE PRICE +5%', confidence: '94.2%', msg: 'Spike in regional FMCG trends.' }
+     ]);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-7xl mx-auto space-y-6 mt-4">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+           <h1 className="text-3xl font-extrabold text-[#0a0a0a] tracking-tight">AI Predictions Engine</h1>
+           <p className="text-gray-500 font-medium">Scikit-Learn models mapping future localized demand.</p>
+        </div>
+        <button onClick={runEngine} className="bg-[#0a0a0a] text-white px-6 py-3 rounded-xl font-bold shadow-xl flex items-center gap-2">
+           <Bot size={18} /> Execute AI Model
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+         {analysis.length === 0 ? (
+            <div className="md:col-span-2 text-center text-gray-400 py-20 bg-white/40 border border-gray-100 rounded-3xl">Click "Execute AI Model" to analyze tracked items.</div>
+         ) : analysis.map(a => (
+            <motion.div key={a.id} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white/60 backdrop-blur-xl border border-gray-100 p-6 rounded-3xl shadow-sm text-center flex flex-col items-center group">
+               <h3 className="font-bold text-gray-800 text-xl">{a.product}</h3>
+               <p className="text-sm text-gray-500 mt-2 h-10">{a.msg}</p>
+               <div className="my-4 inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-xs font-bold font-mono">CONFIDENCE: {a.confidence}</div>
+               <button onClick={() => applyAction(a.product, a.action)} className="w-full mt-auto py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl shadow-lg font-bold text-sm hover:scale-[1.02] transition-transform">
+                 Apply: {a.action}
+               </button>
+            </motion.div>
+         ))}
+      </div>
+    </motion.div>
+  );
+};
+
+// ==========================================
+// 5. FINANCE & AI REPORTS LAYER
+// ==========================================
+const ReportsPage = () => {
+   const pieData = [ {name:'Core Gross Value', val: 75}, {name:'CGST (9%)', val: 12.5}, {name:'SGST (9%)', val: 12.5} ];
+   const colors = ['#0a0a0a', '#4f46e5', '#38bdf8'];
+
+   return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-7xl mx-auto space-y-6">
+         <div className="flex justify-between items-center mt-4 mb-8">
+            <div>
+               <h1 className="text-3xl font-extrabold text-[#0a0a0a] tracking-tight">Financial Intelligence</h1>
+               <p className="text-gray-500 font-medium">Auto-generated cryptographic analysis.</p>
+            </div>
+            {/* Phase 5 Integration Link directly hitting Uvicorn python */}
+            <a href="http://localhost:8000/api/reports/generate-pdf" download="IMS_Report.pdf">
+              <motion.button whileHover={{ scale: 1.05 }} className="bg-[#0a0a0a] text-white px-6 py-3 rounded-xl font-bold shadow-xl flex items-center gap-2">
+                 <FileText size={18} /> Export Cryptographic PDF
+              </motion.button>
+            </a>
+         </div>
+
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white/60 backdrop-blur-xl border border-gray-100 p-8 rounded-3xl shadow-sm flex flex-col justify-center items-center text-center group">
+               <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-all duration-300 shadow-sm border border-blue-100"><DollarSign size={32} /></div>
+               <h2 className="text-4xl font-extrabold text-[#0a0a0a] mb-2">₹142,500</h2>
+               <p className="text-gray-500 font-medium">Realized Profit (Last 30 Days)</p>
+               <div className="mt-4 flex gap-2"><span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold font-mono">+12.4% vs Prev</span></div>
+            </div>
+
+            <div className="bg-white/60 backdrop-blur-xl border border-gray-100 p-8 rounded-3xl shadow-sm flex flex-col items-center">
+               <h2 className="text-xl font-bold text-gray-800 self-start w-full border-b border-gray-100 pb-4 mb-4">GST Compliance Breakdown</h2>
+               <div className="h-48 w-full flex justify-center">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <PieChart>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={2} dataKey="val">
+                           {pieData.map((e, index) => <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                     </PieChart>
+                   </ResponsiveContainer>
+               </div>
+               <div className="flex gap-4 w-full justify-center">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500"><div className="w-3 h-3 bg-[#0a0a0a] rounded-sm"></div> Gross Base</div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500"><div className="w-3 h-3 bg-indigo-500 rounded-sm"></div> CGST</div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500"><div className="w-3 h-3 bg-sky-400 rounded-sm"></div> SGST</div>
+               </div>
+            </div>
+         </div>
+      </motion.div>
+   );
+};
+
+// ==========================================
+// 6. MAIN APPLICATION WRAPPER & ROUTING
+// ==========================================
+const App = () => {
+  return (
+    <Router>
+      <DataProvider>
+        <div className="flex h-screen bg-[#fafafa] font-sans selection:bg-indigo-200">
+           
+           {/* Ultimate Sidebar */}
+           <div className="w-64 bg-white/80 backdrop-blur-2xl border-r border-gray-200 flex flex-col p-4 z-50">
+             <div className="flex items-center gap-3 px-2 py-4 mb-8">
+                <div className="w-10 h-10 bg-gradient-to-br from-[#0a0a0a] to-[#2a2a2a] rounded-xl flex items-center justify-center shadow-lg">
+                   <Sparkles className="text-indigo-400" size={20} />
+                </div>
+                <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">Vault AI</h1>
+             </div>
+
+             <nav className="flex flex-col gap-1 flex-1">
+                <SidebarItem icon={LayoutDashboard} text="Dashboard" to="/" />
+                <SidebarItem icon={Package} text="Inventory Matrix" to="/inventory" />
+                <SidebarItem icon={TrendingUp} text="AI Market Engine" to="/predictions" />
+                <SidebarItem icon={FileText} text="Financial Intel" to="/reports" />
+             </nav>
+
+             <div className="mt-auto pt-4 border-t border-gray-100">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors">
+                   <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">V</div>
+                   <div>
+                     <p className="text-sm font-bold text-gray-800 leading-none">Admin Vaibhav</p>
+                     <p className="text-xs text-gray-500 mt-1">Superuser</p>
+                   </div>
+                </div>
+             </div>
+           </div>
+
+           {/* Main Content Pane */}
+           <div className="flex-1 overflow-y-auto relative">
+              {/* Soft background glow */}
+              <div className="fixed top-0 left-1/4 w-[800px] h-[500px] bg-gradient-to-b from-indigo-50/50 to-transparent blur-[100px] -z-10 pointer-events-none"></div>
+              
+              <div className="p-8">
+                 <Routes>
+                    <Route path="/" element={<SmartDashboard />} />
+                    <Route path="/inventory" element={<InventoryPage />} />
+                    <Route path="/predictions" element={<AIMarketEngine />} />
+                    <Route path="/reports" element={<ReportsPage />} />
+                 </Routes>
+              </div>
+           </div>
+
+        </div>
+      </DataProvider>
+    </Router>
+  );
+};
 
 export default App;

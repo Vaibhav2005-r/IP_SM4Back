@@ -67,6 +67,32 @@ public class ProductRestController {
         return ResponseEntity.badRequest().body("Product not found");
     }
 
+    // NEW: Restock explicit method
+    @PostMapping("/restock")
+    public ResponseEntity<?> addStock(@RequestBody Map<String, Object> stockDto) {
+        String productName = (String) stockDto.get("productName");
+        int qty = (Integer) stockDto.get("quantity");
+        
+        Optional<Product> prodOpt = productRepository.findAll().stream().filter(p -> p.getName().equals(productName)).findFirst();
+        if(prodOpt.isPresent()){
+            Product p = prodOpt.get();
+            Optional<StockLevel> stockOpt = stockLevelRepository.findByProductId(p.getId());
+            StockLevel stockList;
+            if(stockOpt.isPresent()){
+                stockList = stockOpt.get();
+            } else {
+                stockList = new StockLevel();
+                stockList.setProductId(p.getId());
+                stockList.setQuantity(50);
+            }
+            int newAmount = stockList.getQuantity() + qty;
+            stockList.setQuantity(newAmount);
+            stockLevelRepository.save(stockList);
+            return ResponseEntity.ok(Map.of("message", "Restocked smoothly!", "newStock", newAmount));
+        }
+        return ResponseEntity.badRequest().body("Product not found");
+    }
+
     @PostMapping("/prices")
     public ResponseEntity<?> updatePrice(@RequestBody Map<String, Object> priceDto) {
         String productName = (String) priceDto.get("productName");
