@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f7fafc;
+  color: #1a202c;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(0, 49, 83, 0.1);
+}
+
+.hover-3d {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-3d:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 15px 35px rgba(0, 49, 83, 0.15);
+}
+
+@theme {
+  --color-prussian-blue: #003153;
+  --color-prussian-light: #004B7F;
+}
