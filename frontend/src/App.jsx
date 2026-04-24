@@ -433,6 +433,8 @@ const AIMarketEngine = () => {
 // ==========================================
 const ReportsPage = () => {
    const { products } = useContext(DataContext);
+   const [aiInsights, setAiInsights] = useState(null);
+   const [loadingAi, setLoadingAi] = useState(true);
    
    const totalGross = products.reduce((sum, p) => sum + (parseFloat(p.price) || 0) * (p.stock || 50), 0);
    const cgst = totalGross * 0.09;
@@ -441,6 +443,21 @@ const ReportsPage = () => {
 
    const pieData = [ {name:'Core Gross Value', val: totalGross}, {name:'CGST (9%)', val: cgst}, {name:'SGST (9%)', val: sgst} ];
    const colors = ['#0a0a0a', '#4f46e5', '#38bdf8'];
+
+   useEffect(() => {
+       if(products.length > 0) {
+           fetch('http://localhost:8000/api/ai/financial-insights')
+              .then(res => res.json())
+              .then(data => {
+                  setAiInsights(data.insights);
+                  setLoadingAi(false);
+              })
+              .catch(err => {
+                  console.error(err);
+                  setLoadingAi(false);
+              });
+       }
+   }, [products]);
 
    return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-7xl mx-auto space-y-6 mt-4">
@@ -483,6 +500,30 @@ const ReportsPage = () => {
                </div>
             </div>
          </div>
+
+         {/* Gemini AI Copilot Executive Summary */}
+         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-gradient-to-br from-[#0a0a0a] to-[#121212] p-8 rounded-3xl shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700"></div>
+            <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-white/10 rounded-xl border border-white/20"><Bot size={24} className="text-indigo-400" /></div>
+                <h2 className="text-2xl font-bold text-white tracking-tight">Gemini Executive Briefing</h2>
+            </div>
+            
+            <div className="space-y-4">
+                {loadingAi ? (
+                    <div className="flex items-center gap-3 text-indigo-300 font-mono text-sm animate-pulse">
+                        <Sparkles size={16} /> Connecting to Google Gemini 1.5...
+                    </div>
+                ) : (
+                    aiInsights && aiInsights.map((insight, idx) => (
+                        <div key={idx} className="flex gap-4 items-start p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all">
+                            <div className="text-indigo-400 mt-0.5"><CheckCircle size={20} /></div>
+                            <p className="text-gray-300 leading-relaxed">{insight}</p>
+                        </div>
+                    ))
+                )}
+            </div>
+         </motion.div>
       </motion.div>
    );
 };
