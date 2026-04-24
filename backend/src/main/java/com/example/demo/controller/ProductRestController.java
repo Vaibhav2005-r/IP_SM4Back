@@ -32,6 +32,21 @@ public class ProductRestController {
         return ResponseEntity.ok(productRepository.findAll());
     }
 
+    // NEW: Create a brand new Product
+    @PostMapping("/products")
+    public ResponseEntity<?> createProduct(@RequestBody Product newProduct) {
+        // Save the new product
+        Product saved = productRepository.save(newProduct);
+        
+        // Initialize stock mapping to 0 instantly
+        StockLevel stockList = new StockLevel();
+        stockList.setProductId(saved.getId());
+        stockList.setQuantity(0);
+        stockLevelRepository.save(stockList);
+        
+        return ResponseEntity.ok(saved);
+    }
+
     // 2. Record Sales and reduce stock explicitly
     @PostMapping("/sales")
     public ResponseEntity<?> recordSale(@RequestBody Map<String, Object> saleDto) {

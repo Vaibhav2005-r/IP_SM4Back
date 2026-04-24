@@ -91,8 +91,23 @@ const DataProvider = ({ children }) => {
     }
   };
 
+  const createProduct = async (newProd) => {
+    try {
+      const res = await fetch('http://localhost:8081/api/ims/products', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ name: newProd.name, category: newProd.category, price: parseFloat(newProd.price) })
+      });
+      const data = await res.json();
+      setProducts(prev => [{...data, stock: 0}, ...prev]);
+      showToast(`${newProd.name} deployed globally!`, 'success');
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
   return (
-    <DataContext.Provider value={{ products, recordSale, applyAction, restockProduct }}>
+    <DataContext.Provider value={{ products, recordSale, applyAction, restockProduct, createProduct }}>
       {children}
       <AnimatePresence>
         {toast && (
@@ -192,7 +207,7 @@ const SmartDashboard = () => {
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <input type="text" placeholder="Search inventory... (Cmd+K)" className="pl-10 pr-4 py-2 bg-white/60 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none w-64 transition-all" />
             </div>
-            <motion.button whileHover={{ scale: 1.05 }} className="bg-[#0a0a0a] text-white px-5 py-2 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+            <motion.button onClick={() => window.location.href='/predictions'} whileHover={{ scale: 1.05 }} className="bg-[#0a0a0a] text-white px-5 py-2 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
               <Sparkles size={16} /> Predict Trends
             </motion.button>
          </div>
@@ -266,22 +281,43 @@ const ActivityIcon = (props) => <svg {...props} xmlns="http://www.w3.org/2000/sv
 // 4. INTELLIGENT INVENTORY PAGE
 // ==========================================
 const InventoryPage = () => {
-  const { products, recordSale, restockProduct } = useContext(DataContext);
+  const { products, recordSale, restockProduct, createProduct } = useContext(DataContext);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [newProd, setNewProd] = useState({ name: '', category: 'FMCG', price: '' });
 
   const filtered = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-7xl mx-auto space-y-6">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-7xl mx-auto space-y-6 relative">
       <div className="flex justify-between items-center mt-4">
         <div>
            <h1 className="text-3xl font-extrabold text-[#0a0a0a] tracking-tight">Product Matrix</h1>
-           <p className="text-gray-500 font-medium">Manage and track your 100+ global entities.</p>
+           <p className="text-gray-500 font-medium">Manage and track your global entities.</p>
         </div>
-        <button className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:scale-105 transition-all flex items-center gap-2">
+        <button onClick={() => setShowModal(true)} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:scale-105 transition-all flex items-center gap-2 cursor-pointer">
            <Package size={18} /> Add Product
         </button>
       </div>
+
+      <AnimatePresence>
+        {showModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }} className="bg-white rounded-3xl p-8 shadow-2xl w-full max-w-md border border-gray-100">
+               <h2 className="text-2xl font-extrabold text-[#0a0a0a] mb-6">Deploy New Product</h2>
+               <div className="space-y-4">
+                  <input placeholder="Product Name (e.g. Red Label Tea)" onChange={e => setNewProd({...newProd, name: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <input placeholder="Category" value={newProd.category} onChange={e => setNewProd({...newProd, category: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <input placeholder="Price Base (INR)" type="number" onChange={e => setNewProd({...newProd, price: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" />
+               </div>
+               <div className="flex gap-4 mt-8">
+                  <button onClick={() => setShowModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors">Cancel</button>
+                  <button onClick={() => { createProduct(newProd); setShowModal(false); }} className="flex-1 py-3 bg-[#0a0a0a] text-white rounded-xl font-bold hover:bg-gray-800 transition-colors">Launch Entity</button>
+               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="bg-white/60 backdrop-blur-xl border border-gray-100 rounded-3xl shadow-sm overflow-hidden p-6">
          <div className="mb-6">
@@ -351,12 +387,14 @@ const InventoryPage = () => {
 // ==========================================
 const AIMarketEngine = () => {
   const [analysis, setAnalysis] = useState([]);
-  const { applyAction } = useContext(DataContext);
+  const { products, applyAction } = useContext(DataContext);
 
   const runEngine = () => {
+     if (products.length < 2) return;
+     const shuffled = [...products].sort(() => 0.5 - Math.random()).slice(0, 2);
      setAnalysis([
-       { id: 1, product: 'Samsung Galaxy M34', action: 'APPLY DISCOUNT', confidence: '88.3%', msg: 'Low demand detected next quarter.' },
-       { id: 2, product: 'Aashirvaad Shudh Chakki Atta', action: 'INCREASE PRICE +5%', confidence: '94.2%', msg: 'Spike in regional FMCG trends.' }
+       { id: 1, product: shuffled[0].name, action: 'APPLY DISCOUNT', confidence: '88.3%', msg: 'Low demand detected next quarter.' },
+       { id: 2, product: shuffled[1].name, action: 'INCREASE PRICE +5%', confidence: '94.2%', msg: 'Spike in regional FMCG trends.' }
      ]);
   };
 
