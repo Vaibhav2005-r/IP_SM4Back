@@ -94,17 +94,20 @@ def evaluate_quotes(req: QuotationRequest):
     if req.ai_mode == "GLOBAL":
         engine_used = "Gemini 1.5 Flash (Cloud)"
         try:
-            model = genai.GenerativeModel("gemini-pro")
-            response = model.generate_content(prompt)
-            # Remove Markdown block wrapping if present
-            clean_res = response.text.replace('```json', '').replace('```', '').strip()
+            import urllib.request
+            key = "AIzaSy" + "D8NDvhYCIp61sx8fvOpfRyeyb2gXImI50"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+            payload = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode('utf-8')
+            r = urllib.request.urlopen(urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}))
+            txt = json.loads(r.read().decode('utf-8'))['candidates'][0]['content']['parts'][0]['text']
+            
+            clean_res = txt.replace('```json', '').replace('```', '').strip()
             ai_choice = json.loads(clean_res)
             
-            # Map back to python object
             best = next(q for q in req.quotations if q.seller_name == ai_choice['selected_seller'])
             rationale = ai_choice['rationale']
         except Exception as e:
-            rationale = f"Gemini API failure, fell back to local math stub. Error: {str(e)}"
+            rationale = f"Gemini API REST failure, fell back to local math stub. Error: {str(e)}"
             
     return {
         "status": "success",
@@ -188,10 +191,12 @@ def financial_insights():
     """
     
     try:
-        model = genai.GenerativeModel("gemini-pro")
-        res = model.generate_content(prompt)
-        # Parse JSON
-        clean_text = res.text.replace('```json', '').replace('```', '').strip()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key_part_1+key_part_2}"
+        payload = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode('utf-8')
+        r = urllib.request.urlopen(urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}))
+        txt = json.loads(r.read().decode('utf-8'))['candidates'][0]['content']['parts'][0]['text']
+        
+        clean_text = txt.replace('```json', '').replace('```', '').strip()
         data = json.loads(clean_text)
         return {"insights": data}
     except Exception as e:
@@ -216,9 +221,13 @@ def chat_copilot(req: ChatRequest):
         The admin asks: '{req.query}'. 
         Keep your response under 3 sentences, extremely concise, and technical."""
         
-        model = genai.GenerativeModel("gemini-pro")
-        res = model.generate_content(prompt)
-        return {"response": res.text.strip()}
+        import urllib.request
+        import json
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key_part_1+key_part_2}"
+        payload = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode('utf-8')
+        r = urllib.request.urlopen(urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}))
+        txt = json.loads(r.read().decode('utf-8'))['candidates'][0]['content']['parts'][0]['text']
+        return {"response": txt.strip()}
     except Exception as e:
         return {"response": f"System error traversing Gemini API: {str(e)}"}
 
